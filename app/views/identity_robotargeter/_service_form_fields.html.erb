@@ -1,0 +1,18 @@
+<div class="form-group">
+  <%= label_tag "services[robotargeter]" do %>
+    <p>Push this list to Robotargeter Campaign</p>
+    <%= check_box_tag "services[robotargeter]", "on", false, {:id => "services_robotargeter", :class => "js-toggle-select"} %>
+    Yes
+  <% end %>
+  <div class="js-toggle-input" style="display: none;">
+    <%= label_tag "robotargeter[campaign_id]", 'Campaign: ' %>
+    <%= select_tag "robotargeter[campaign_id]", options_for_select(IdentityRobotargeter::ApplicationHelper.campaigns_for_select) %>
+    <br/>
+    <%= label_tag "robotargeter[phone_type]", 'Phone Type: ' %>
+    <%= select_tag "robotargeter[phone_type]", options_for_select([['Mobile', 'mobile'], ['Landline', 'landline']]) %>
+    <br/>
+    <%= label_tag "robotargeter[priority]", 'Priority: ' %>
+    <%= number_field_tag "robotargeter[priority]", 1, min: 1, max: 10 %>
+  </div>
+  <hr />
+</div>
