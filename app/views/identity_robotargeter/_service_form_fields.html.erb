@@ -9,7 +9,7 @@
     <%= select_tag "robotargeter[campaign_id]", options_for_select(IdentityRobotargeter::ApplicationHelper.campaigns_for_select) %>
     <br/>
     <%= label_tag "robotargeter[phone_type]", 'Phone Type: ' %>
-    <%= select_tag "robotargeter[phone_type]", options_for_select([['Mobile', 'mobile'], ['Landline', 'landline']]) %>
+    <%= select_tag "robotargeter[phone_type]", options_for_select([['Any', 'all'], ['Mobile', 'mobile'], ['Landline', 'landline']]) %>
     <br/>
     <%= label_tag "robotargeter[priority]", 'Priority: ' %>
     <%= number_field_tag "robotargeter[priority]", 1, min: 1, max: 10 %>
