@@ -11,7 +11,8 @@ module IdentityRobotargeter
     end
 
     def mobile_number
-      @object.send(instance_options[:phone_type])
+      phone_scope = instance_options[:phone_type] == 'all' ? 'phone' : instance_options[:phone_type]
+      @object.send(phone_scope)
     end
 
     def campaign_id
