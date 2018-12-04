@@ -69,9 +69,9 @@ module IdentityRobotargeter
       end
 
       contact_campaign = ContactCampaign.find_or_create_by(external_id: call.callee.campaign.id, system: SYSTEM_NAME)
-      contact_campaign.update_attributes(name: call.callee.campaign.name, contact_type: CONTACT_TYPE)
+      contact_campaign.update_attributes!(name: call.callee.campaign.name, contact_type: CONTACT_TYPE)
 
-      contact.update_attributes(contactee: contactee,
+      contact.update_attributes!(contactee: contactee,
                                 contact_campaign: contact_campaign,
                                 duration: call.duration,
                                 contact_type: CONTACT_TYPE,
