@@ -1,6 +1,6 @@
 module IdentityRobotargeter
   class RobotargeterMemberSyncPushSerializer < ActiveModel::Serializer
-    attributes :external_id, :first_name, :mobile_number, :campaign_id, :audience_id, :data
+    attributes :external_id, :first_name, :mobile_number, :campaign_id, :audience_id, :data, :callable
 
     def external_id
       @object.id
@@ -25,6 +25,10 @@ module IdentityRobotargeter
 
     def data
       @object.flattened_custom_fields.to_json
+    end
+
+    def callable
+      true
     end
   end
 end
