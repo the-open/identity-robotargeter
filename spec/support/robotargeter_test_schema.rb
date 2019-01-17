@@ -28,7 +28,7 @@ class CreateRobotargeterTestDb < ActiveRecord::Migration[5.0]
 
     add_index 'callees', ['campaign_id', 'mobile_number'], name: 'callees_campaign_id_mobile_number_unique', unique: true, using: :btree
 
-    create_table 'calls', force: true do |t|
+    create_table 'calls', { id: :string, force: true } do |t|
       t.integer  'callee_id'
       t.datetime 'created_at',              default: 'now()'
       t.datetime 'updated_at',              default: 'now()'
@@ -59,6 +59,7 @@ class CreateRobotargeterTestDb < ActiveRecord::Migration[5.0]
       t.string   'daily_finish',                default: '1700'
       t.text     'questions'
       t.boolean  'transparent_target_transfer', default: true
+      t.boolean  "sync_to_identity",            default: true
     end
 
     add_index 'campaigns', ['name'], name: 'campaigns_name_index', using: :btree

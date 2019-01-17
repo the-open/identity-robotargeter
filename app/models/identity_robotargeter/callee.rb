@@ -5,6 +5,7 @@ module IdentityRobotargeter
     self.table_name = "callees"
     belongs_to :campaign
     validates_uniqueness_of :mobile_number, scope: :campaign
+    has_many :calls
     has_many :redirects
 
     def phone_number
