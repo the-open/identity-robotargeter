@@ -54,6 +54,8 @@ module IdentityRobotargeter
   end
 
   def self.fetch_new_calls(force: false)
+    puts ">>> Robotargeter fetch_new_calls running ..."
+
     last_updated_at = Time.parse($redis.with { |r| r.get 'robotargeter:calls:last_updated_at' } || '1970-01-01 00:00:00')
     updated_calls = Call.updated_calls(force ? DateTime.new() : last_updated_at)
 
@@ -102,6 +104,8 @@ module IdentityRobotargeter
   end
 
   def self.fetch_new_redirects
+    puts ">>> Robotargeter fetch_new_redirects running ..."
+
     last_created_at = Time.parse($redis.with { |r| r.get 'robotargeter:redirects:last_created_at' } || '1970-01-01 00:00:00')
 
     updated_redirects = Redirect.updated_redirects(last_created_at)
