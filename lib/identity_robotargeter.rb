@@ -78,38 +78,7 @@ module IdentityRobotargeter
     iteration_method = force ? :find_each : :each
 
     updated_calls.send(iteration_method) do |call|
-      contact = Contact.find_or_initialize_by(external_id: call.id, system: SYSTEM_NAME)
-      contactee = Member.upsert_member(phones: [{ phone: call.callee.phone_number }], firstname: call.callee.first_name, lastname: call.callee.last_name)
-
-      unless contactee
-        Notify.warning "Robotargeter: Contactee Insert Failed", "Contactee #{call.inspect} could not be inserted because the contactee could not be created"
-        next
-      end
-
-      contact_campaign = ContactCampaign.find_or_create_by(external_id: call.callee.campaign.id, system: SYSTEM_NAME)
-      contact_campaign.update_attributes!(name: call.callee.campaign.name, contact_type: CONTACT_TYPE)
-
-      contact.update_attributes!(contactee: contactee,
-                                contact_campaign: contact_campaign,
-                                duration: call.duration,
-                                contact_type: CONTACT_TYPE,
-                                happened_at: call.created_at,
-                                status: call.status)
-      contact.reload
-
-      if Settings.robotargeter.opt_out_subscription_id
-        if call.callee.opted_out_at
-          subscription = Subscription.find(Settings.robotargeter.opt_out_subscription_id)
-          contactee.unsubscribe_from(subscription, 'robotargeter:disposition')
-        end
-      end
-
-      if Campaign.connection.tables.include?('survey_results')
-        call.survey_results.each do |sr|
-          contact_response_key = ContactResponseKey.find_or_create_by(key: sr.question, contact_campaign: contact_campaign)
-          ContactResponse.find_or_create_by(contact: contact, value: sr.answer, contact_response_key: contact_response_key)
-        end
-      end
+      self.delay(retry: false, queue: 'low').handle_new_call(call.id)
     end
 
     unless updated_calls.empty?
@@ -119,27 +88,51 @@ module IdentityRobotargeter
     updated_calls.size
   end
 
-  def self.fetch_new_redirects
-    ## Do not run method if another worker is currently processing this method
-    if self.worker_currenly_running?(__method__.to_s)
+  def self.handle_new_call(call_id)
+    call = Call.find(call_id)
+    contact = Contact.find_or_initialize_by(external_id: call.id, system: SYSTEM_NAME)
+    contactee = Member.upsert_member(phones: [{ phone: call.callee.phone_number }], firstname: call.callee.first_name, lastname: call.callee.last_name)
+
+    unless contactee
+      Notify.warning "Robotargeter: Contactee Insert Failed", "Contactee #{call.inspect} could not be inserted because the contactee could not be created"
       return
     end
 
-    last_created_at = Time.parse($redis.with { |r| r.get 'robotargeter:redirects:last_created_at' } || '1970-01-01 00:00:00')
+    contact_campaign = ContactCampaign.find_or_create_by(external_id: call.callee.campaign.id, system: SYSTEM_NAME)
+    contact_campaign.update_attributes!(name: call.callee.campaign.name, contact_type: CONTACT_TYPE)
 
+    contact.update_attributes!(contactee: contactee,
+                              contact_campaign: contact_campaign,
+                              duration: call.duration,
+                              contact_type: CONTACT_TYPE,
+                              happened_at: call.created_at,
+                              status: call.status)
+    contact.reload
+
+    if Settings.robotargeter.opt_out_subscription_id
+      if call.callee.opted_out_at
+        subscription = Subscription.find(Settings.robotargeter.opt_out_subscription_id)
+        contactee.unsubscribe_from(subscription, 'robotargeter:disposition')
+      end
+    end
+
+    if Campaign.connection.tables.include?('survey_results')
+      call.survey_results.each do |sr|
+        contact_response_key = ContactResponseKey.find_or_create_by(key: sr.question, contact_campaign: contact_campaign)
+        ContactResponse.find_or_create_by(contact: contact, value: sr.answer, contact_response_key: contact_response_key)
+      end
+    end
+  end
+
+  def self.fetch_new_redirects
+    ## Do not run method if another worker is currently processing this method
+    return if self.worker_currenly_running?(__method__.to_s)
+
+    last_created_at = Time.parse($redis.with { |r| r.get 'robotargeter:redirects:last_created_at' } || '1970-01-01 00:00:00')
     updated_redirects = Redirect.updated_redirects(last_created_at)
 
     updated_redirects.each do |redirect|
-      payload = {
-        cons_hash: { phones: [{ phone: redirect.callee.phone_number }], firstname: redirect.callee.first_name, lastname: redirect.callee.last_name },
-        action_name: redirect.campaign.name,
-        action_type: CONTACT_TYPE,
-        action_technical_type: 'robotargeter_redirect',
-        external_id: redirect.campaign.id,
-        create_dt: redirect.created_at
-      }
-
-      Member.record_action(payload, 'robotargeter:fetch_new_redirects')
+      self.delay(retry: false, queue: 'low').handle_new_redirect(redirect.id)
     end
 
     unless updated_redirects.empty?
@@ -147,5 +140,20 @@ module IdentityRobotargeter
     end
 
     updated_redirects.size
+  end
+
+  def self.handle_new_redirect(redirect_id)
+    redirect = Redirect.find(redirect_id)
+
+    payload = {
+      cons_hash: { phones: [{ phone: redirect.callee.phone_number }], firstname: redirect.callee.first_name, lastname: redirect.callee.last_name },
+      action_name: redirect.campaign.name,
+      action_type: CONTACT_TYPE,
+      action_technical_type: 'robotargeter_redirect',
+      external_id: redirect.campaign.id,
+      create_dt: redirect.created_at
+    }
+
+    Member.record_action(payload, 'robotargeter:fetch_new_redirects')
   end
 end

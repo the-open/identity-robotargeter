@@ -2,6 +2,15 @@ require 'rails_helper'
 
 describe IdentityRobotargeter do
   context 'fetching new calls' do
+
+    before(:all) do
+      Sidekiq::Testing.inline!
+    end
+
+    after(:all) do
+      Sidekiq::Testing.fake!
+    end
+
     before(:each) do
       clean_external_database
       $redis.reset
@@ -152,6 +161,15 @@ describe IdentityRobotargeter do
   end
 
   context '#fetching_new_redirects' do
+
+    before(:all) do
+      Sidekiq::Testing.inline!
+    end
+
+    after(:all) do
+      Sidekiq::Testing.fake!
+    end
+
     before(:each) do
       clean_external_database
       $redis.reset
