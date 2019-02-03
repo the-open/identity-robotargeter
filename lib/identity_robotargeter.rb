@@ -104,7 +104,14 @@ module IdentityRobotargeter
   def self.handle_new_call(call_id)
     call = Call.find(call_id)
     contact = Contact.find_or_initialize_by(external_id: call.id, system: SYSTEM_NAME)
-    contactee = Member.upsert_member(phones: [{ phone: call.callee.phone_number }], firstname: call.callee.first_name, lastname: call.callee.last_name)
+    contactee = Member.upsert_member(
+      {
+        phones: [{ phone: call.callee.phone_number }],
+        firstname: call.callee.first_name,
+        lastname: call.callee.last_name
+      },
+      "#{SYSTEM_NAME}:#{__method__.to_s}"
+    )
 
     unless contactee
       Notify.warning "Robotargeter: Contactee Insert Failed", "Contactee #{call.inspect} could not be inserted because the contactee could not be created"
@@ -167,6 +174,6 @@ module IdentityRobotargeter
       create_dt: redirect.created_at
     }
 
-    Member.record_action(payload, 'robotargeter:fetch_new_redirects')
+    Member.record_action(payload, "#{SYSTEM_NAME}:#{__method__.to_s}")
   end
 end
