@@ -11,7 +11,9 @@ class Settings
   def self.robotargeter
     return {
       "database_url" => ENV['ROBOTARGETER_DATABASE_URL'],
-      "read_only_database_url" => ENV['ROBOTARGETER_DATABASE_URL']
+      "read_only_database_url" => ENV['ROBOTARGETER_DATABASE_URL'],
+      "push_batch_amount" => nil,
+      "pull_batch_amount" => nil,
     }
   end
 

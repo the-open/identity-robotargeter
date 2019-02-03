@@ -1,14 +1,15 @@
 require "identity_robotargeter/engine"
 
 module IdentityRobotargeter
-  SYSTEM_NAME='robotargeter'
-  BATCH_AMOUNT=1000
-  SYNCING='campaign'
-  CONTACT_TYPE='call'
-  ACTIVE_STATUS='active'
-  FINALISED_STATUS='finalised'
-  FAILED_STATUS='failed'
-  PULL_JOBS=[:fetch_new_calls, :fetch_new_redirects]
+  SYSTEM_NAME = 'robotargeter'
+  PULL_BATCH_AMOUNT = 1000
+  PUSH_BATCH_AMOUNT = 1000
+  SYNCING = 'campaign'
+  CONTACT_TYPE = 'call'
+  ACTIVE_STATUS = 'active'
+  FINALISED_STATUS = 'finalised'
+  FAILED_STATUS = 'failed'
+  PULL_JOBS = [[:fetch_new_calls, 5.minutes], [:fetch_new_redirects, 15.minutes]]
 
   def self.push(sync_id, members, external_system_params)
     begin
@@ -30,7 +31,7 @@ module IdentityRobotargeter
       audience.update_attributes!(status: ACTIVE_STATUS)
       campaign_id = JSON.parse(external_system_params)['campaign_id'].to_i
       phone_type = JSON.parse(external_system_params)['phone_type'].to_s
-      members.in_batches(of: BATCH_AMOUNT).each_with_index do |batch_members, batch_index|
+      members.in_batches(of: get_push_batch_amount).each_with_index do |batch_members, batch_index|
         rows = ActiveModel::Serializer::CollectionSerializer.new(
           batch_members,
           serializer: RobotargeterMemberSyncPushSerializer,
@@ -64,6 +65,18 @@ module IdentityRobotargeter
     end
     puts ">>> #{SYSTEM_NAME.titleize} #{method_name} running ..."
     return false
+  end
+
+  def self.get_pull_batch_amount
+    Settings.robotargeter.pull_batch_amount || PULL_BATCH_AMOUNT
+  end
+
+  def self.get_push_batch_amount
+    Settings.robotargeter.push_batch_amount || PUSH_BATCH_AMOUNT
+  end
+
+  def self.get_pull_jobs
+    defined?(PULL_JOBS) && PULL_JOBS.is_a?(Array) ? PULL_JOBS : []
   end
 
   def self.fetch_new_calls(force: false)

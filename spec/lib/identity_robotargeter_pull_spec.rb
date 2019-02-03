@@ -17,9 +17,12 @@ describe IdentityRobotargeter do
 
       @subscription = Subscription.create!(name: 'Robotargeting')
       Settings.stub_chain(:robotargeter, :opt_out_subscription_id) { @subscription.id }
+      Settings.stub_chain(:robotargeter, :push_batch_amount) { nil }
+      Settings.stub_chain(:robotargeter, :pull_batch_amount) { nil }
 
       @time = Time.now - 120.seconds
       @robotargeter_campaign = FactoryBot.create(:robotargeter_campaign, name: 'Test')
+
       3.times do |n|
         callee = FactoryBot.create(:robotargeter_callee, first_name: "Bob#{n}", mobile_number: "6142770040#{n}", campaign: @robotargeter_campaign)
         call = FactoryBot.create(:robotargeter_call, created_at: @time, id: n, callee: callee, duration: 60, status: 'success', outgoing: true)
@@ -201,6 +204,22 @@ describe IdentityRobotargeter do
       IdentityRobotargeter.fetch_new_redirects
       action = Action.find_by(external_id: @robotargeter_campaign.id, technical_type: 'robotargeter_redirect')
       expect(action.members.count).to eq(3)
+    end
+  end
+
+  context '#get_pull_batch_amount' do
+    context 'with no settings parameters set' do
+      it 'should return default class constant' do
+        expect(IdentityRobotargeter.get_pull_batch_amount).to eq(1000)
+      end
+    end
+    context 'with settings parameters set' do
+      before(:each) do
+        Settings.stub_chain(:robotargeter, :pull_batch_amount) { 100 }
+      end
+      it 'should return set variable' do
+        expect(IdentityRobotargeter.get_pull_batch_amount).to eq(100)
+      end
     end
   end
 end

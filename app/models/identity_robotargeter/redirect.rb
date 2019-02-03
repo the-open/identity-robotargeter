@@ -11,7 +11,7 @@ module IdentityRobotargeter
       includes(:callee, :campaign)
       .where('redirects.created_at >= ?', last_updated_at)
       .order('redirects.created_at')
-      .limit(BATCH_AMOUNT)
+      .limit(IdentityRobotargeter.get_pull_batch_amount)
     }
   end
 end

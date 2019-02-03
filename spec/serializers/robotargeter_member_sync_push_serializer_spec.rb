@@ -2,7 +2,7 @@ describe IdentityRobotargeter::RobotargeterMemberSyncPushSerializer do
   context 'serialize' do
     before(:each) do
       clean_external_database
-
+      Settings.stub_chain(:robotargeter) { {} }
       @sync_id = 1
       @robotargeter_campaign = FactoryBot.create(:robotargeter_campaign)
       @external_system_params = JSON.generate({'campaign_id' => @robotargeter_campaign.id, priority: 2, phone_type: 'mobile'})
