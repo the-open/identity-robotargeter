@@ -133,11 +133,9 @@ module IdentityRobotargeter
                               status: call.status)
     contact.reload
 
-    if Settings.robotargeter.opt_out_subscription_id
-      if call.callee.opted_out_at
-        subscription = Subscription.find(Settings.robotargeter.opt_out_subscription_id)
-        contactee.unsubscribe_from(subscription, 'robotargeter:disposition')
-      end
+    if Settings.robotargeter.subscription_id && call.callee.opted_out_at
+      subscription = Subscription.find(Settings.robotargeter.subscription_id)
+      contactee.unsubscribe_from(subscription, 'robotargeter:disposition')
     end
 
     if Campaign.connection.tables.include?('survey_results')

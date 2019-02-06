@@ -16,7 +16,7 @@ describe IdentityRobotargeter do
       $redis.reset
 
       @subscription = Subscription.create!(name: 'Robotargeting')
-      Settings.stub_chain(:robotargeter, :opt_out_subscription_id) { @subscription.id }
+      Settings.stub_chain(:robotargeter, :subscription_id) { @subscription.id }
       Settings.stub_chain(:robotargeter, :push_batch_amount) { nil }
       Settings.stub_chain(:robotargeter, :pull_batch_amount) { nil }
 
