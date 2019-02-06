@@ -9,7 +9,7 @@ module IdentityRobotargeter
   ACTIVE_STATUS = 'active'
   FINALISED_STATUS = 'finalised'
   FAILED_STATUS = 'failed'
-  PULL_JOBS = [[:fetch_new_calls, 5.minutes], [:fetch_new_redirects, 15.minutes]]
+  PULL_JOBS = [[:fetch_new_calls, 5.minutes], [:fetch_new_redirects, 15.minutes], [:fetch_active_campaigns, 10.minutes]]
 
   def self.push(sync_id, members, external_system_params)
     begin
@@ -122,7 +122,7 @@ module IdentityRobotargeter
       return
     end
 
-    contact_campaign = ContactCampaign.find_or_create_by(external_id: call.callee.campaign.id, system: SYSTEM_NAME)
+    contact_campaign = ContactCampaign.find_or_initialize_by(external_id: call.callee.campaign.id, system: SYSTEM_NAME)
     contact_campaign.update_attributes!(name: call.callee.campaign.name, contact_type: CONTACT_TYPE)
 
     contact.update_attributes!(contactee: contactee,
@@ -140,8 +140,8 @@ module IdentityRobotargeter
 
     if Campaign.connection.tables.include?('survey_results')
       call.survey_results.each do |sr|
-        contact_response_key = ContactResponseKey.find_or_create_by(key: sr.question, contact_campaign: contact_campaign)
-        ContactResponse.find_or_create_by(contact: contact, value: sr.answer, contact_response_key: contact_response_key)
+        contact_response_key = ContactResponseKey.find_or_create_by!(key: sr.question, contact_campaign: contact_campaign)
+        ContactResponse.find_or_create_by!(contact: contact, value: sr.answer, contact_response_key: contact_response_key)
       end
     end
   end
@@ -177,5 +177,31 @@ module IdentityRobotargeter
     }
 
     Member.record_action(payload, "#{SYSTEM_NAME}:#{__method__.to_s}")
+  end
+
+  def self.fetch_active_campaigns(force: false)
+    ## Do not run method if another worker is currently processing this method
+    return if self.worker_currenly_running?(__method__.to_s)
+
+    active_campaigns = IdentityRobotargeter::Campaign.active
+
+    iteration_method = force ? :find_each : :each
+
+    active_campaigns.send(iteration_method) do |campaign|
+      self.delay(retry: false, queue: 'low').handle_campaign(campaign.id)
+    end
+
+    active_campaigns.size
+  end
+
+  def self.handle_campaign(campaign_id)
+    campaign = IdentityRobotargeter::Campaign.find(campaign_id)
+
+    contact_campaign = ContactCampaign.find_or_initialize_by(external_id: campaign.id, system: SYSTEM_NAME)
+    contact_campaign.update_attributes!(name: campaign.name, contact_type: CONTACT_TYPE)
+
+    campaign.questions.each do |k,v|
+      ContactResponseKey.find_or_create_by!(key: k, contact_campaign: contact_campaign)
+    end
   end
 end

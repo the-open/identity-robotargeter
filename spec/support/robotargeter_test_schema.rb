@@ -57,7 +57,7 @@ class CreateRobotargeterTestDb < ActiveRecord::Migration[5.0]
       t.integer  'max_call_attempts',           default: 1
       t.string   'daily_start',                 default: '0900'
       t.string   'daily_finish',                default: '1700'
-      t.text     'questions'
+      t.json     'questions'
       t.boolean  'transparent_target_transfer', default: true
       t.boolean  "sync_to_identity",            default: true
     end
