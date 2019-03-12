@@ -9,7 +9,7 @@ module IdentityRobotargeter
   ACTIVE_STATUS = 'active'
   FINALISED_STATUS = 'finalised'
   FAILED_STATUS = 'failed'
-  PULL_JOBS = [[:fetch_new_calls, 5.minutes], [:fetch_new_redirects, 15.minutes], [:fetch_active_campaigns, 10.minutes]]
+  PULL_JOBS = [[:fetch_new_calls, 30.minutes], [:fetch_new_redirects, 30.minutes], [:fetch_active_campaigns, 30.minutes]]
 
   def self.push(sync_id, members, external_system_params)
     begin
