@@ -50,8 +50,13 @@ module IdentityRobotargeter
     end
   end
 
-  def self.description(external_system_params, contact_campaign_name)
-    "#{SYSTEM_NAME.titleize} - #{SYNCING.titleize}: #{contact_campaign_name} ##{JSON.parse(external_system_params)['campaign_id']} (#{CONTACT_TYPE})"
+  def self.description(sync_type, external_system_params, contact_campaign_name)
+    external_system_params_hash = JSON.parse(external_system_params)
+    if sync_type === 'push'
+      "#{SYSTEM_NAME.titleize} - #{SYNCING.titleize}: #{contact_campaign_name} ##{external_system_params_hash['campaign_id']} (#{CONTACT_TYPE})"
+    else
+      "#{SYSTEM_NAME.titleize}: #{external_system_params_hash['pull_job']}"
+    end
   end
 
   def self.base_campaign_url(campaign_id)
@@ -83,11 +88,20 @@ module IdentityRobotargeter
     defined?(PULL_JOBS) && PULL_JOBS.is_a?(Array) ? PULL_JOBS : []
   end
 
-  def self.fetch_new_calls(force: false)
-    ## Do not run method if another worker is currently processing this method
-    if self.worker_currenly_running?(__method__.to_s)
-      return
+  def self.pull(sync_id, external_system_params)
+    begin
+      pull_job = JSON.parse(external_system_params)['pull_job'].to_s
+      self.send(pull_job, sync_id) do |records_for_import_count, records_for_import, records_for_import_scope, pull_deferred|
+        yield records_for_import_count, records_for_import, records_for_import_scope, pull_deferred
+      end
+    rescue => e
+      raise e
     end
+  end
+
+  def self.fetch_new_calls(sync_id, force: false)
+    ## Do not run method if another worker is currently processing this method
+    yield 0, {}, {}, true if self.worker_currenly_running?(__method__.to_s)
 
     last_updated_at = Time.parse($redis.with { |r| r.get 'robotargeter:calls:last_updated_at' } || '1970-01-01 00:00:00')
     updated_calls = Call.updated_calls(force ? DateTime.new() : last_updated_at)
@@ -95,26 +109,32 @@ module IdentityRobotargeter
     iteration_method = force ? :find_each : :each
 
     updated_calls.send(iteration_method) do |call|
-      self.delay(retry: false, queue: 'low').handle_new_call(call.id)
+      self.delay(retry: false, queue: 'low').handle_new_call(sync_id, call.id)
     end
 
     unless updated_calls.empty?
       $redis.with { |r| r.set 'robotargeter:calls:last_updated_at', updated_calls.last.updated_at }
     end
 
-    updated_calls.size
+    yield updated_calls.size, updated_calls.pluck(:id), { scope: 'robotargeter:calls:last_updated_at', from: last_updated_at, to: updated_calls.empty? ? nil : updated_calls.last.updated_at }, false
   end
 
-  def self.handle_new_call(call_id)
+  def self.handle_new_call(sync_id, call_id)
+    audit_data = {sync_id: sync_id}
     call = Call.find(call_id)
     contact = Contact.find_or_initialize_by(external_id: call.id, system: SYSTEM_NAME)
+    contact.audit_data = audit_data
+
     contactee = Member.upsert_member(
       {
         phones: [{ phone: call.callee.phone_number }],
         firstname: call.callee.first_name,
         lastname: call.callee.last_name
       },
-      "#{SYSTEM_NAME}:#{__method__.to_s}"
+      "#{SYSTEM_NAME}:#{__method__.to_s}",
+      audit_data,
+      false,
+      true
     )
 
     unless contactee
@@ -123,6 +143,7 @@ module IdentityRobotargeter
     end
 
     contact_campaign = ContactCampaign.find_or_initialize_by(external_id: call.callee.campaign.id, system: SYSTEM_NAME)
+    contact_campaign.audit_data = audit_data
     contact_campaign.update_attributes!(name: call.callee.campaign.name, contact_type: CONTACT_TYPE)
 
     contact.update_attributes!(contactee: contactee,
@@ -135,36 +156,41 @@ module IdentityRobotargeter
 
     if Settings.robotargeter.subscription_id && call.callee.opted_out_at
       subscription = Subscription.find(Settings.robotargeter.subscription_id)
-      contactee.unsubscribe_from(subscription, 'robotargeter:disposition')
+      contactee.unsubscribe_from(subscription, 'robotargeter:disposition', DateTime.now, nil, audit_data)
     end
 
     if Campaign.connection.tables.include?('survey_results')
       call.survey_results.each do |sr|
-        contact_response_key = ContactResponseKey.find_or_create_by!(key: sr.question, contact_campaign: contact_campaign)
-        ContactResponse.find_or_create_by!(contact: contact, value: sr.answer, contact_response_key: contact_response_key)
+        contact_response_key = ContactResponseKey.find_or_initialize_by(key: sr.question, contact_campaign: contact_campaign)
+        contact_response_key.audit_data = audit_data
+        contact_response_key.save! if contact_response_key.new_record? 
+        contact_response = ContactResponse.find_or_initialize_by(contact: contact, value: sr.answer, contact_response_key: contact_response_key)
+        contact_response.audit_data = audit_data
+        contact_response.save! if contact_response.new_record? 
       end
     end
   end
 
-  def self.fetch_new_redirects
+  def self.fetch_new_redirects(sync_id)
     ## Do not run method if another worker is currently processing this method
-    return if self.worker_currenly_running?(__method__.to_s)
+    yield 0, {}, {}, true if self.worker_currenly_running?(__method__.to_s)
 
     last_created_at = Time.parse($redis.with { |r| r.get 'robotargeter:redirects:last_created_at' } || '1970-01-01 00:00:00')
     updated_redirects = Redirect.updated_redirects(last_created_at)
 
     updated_redirects.each do |redirect|
-      self.delay(retry: false, queue: 'low').handle_new_redirect(redirect.id)
+      self.delay(retry: false, queue: 'low').handle_new_redirect(sync_id, redirect.id)
     end
 
     unless updated_redirects.empty?
       $redis.with { |r| r.set 'robotargeter:redirects:last_created_at', updated_redirects.last.created_at }
     end
 
-    updated_redirects.size
+    yield updated_redirects.size, updated_redirects.pluck(:id), { scope: 'robotargeter:redirects:last_created_at', from: last_created_at, to: updated_redirects.empty? ? nil : updated_redirects.last.created_at }, false
   end
 
-  def self.handle_new_redirect(redirect_id)
+  def self.handle_new_redirect(sync_id, redirect_id)
+    audit_data = {sync_id: sync_id}
     redirect = Redirect.find(redirect_id)
 
     payload = {
@@ -176,32 +202,36 @@ module IdentityRobotargeter
       create_dt: redirect.created_at
     }
 
-    Member.record_action(payload, "#{SYSTEM_NAME}:#{__method__.to_s}")
+    Member.record_action(payload, "#{SYSTEM_NAME}:#{__method__.to_s}", audit_data)
   end
 
-  def self.fetch_active_campaigns(force: false)
+  def self.fetch_active_campaigns(sync_id, force: false)
     ## Do not run method if another worker is currently processing this method
-    return if self.worker_currenly_running?(__method__.to_s)
+    yield 0, {}, {}, true if self.worker_currenly_running?(__method__.to_s)
 
     active_campaigns = IdentityRobotargeter::Campaign.active
 
     iteration_method = force ? :find_each : :each
 
     active_campaigns.send(iteration_method) do |campaign|
-      self.delay(retry: false, queue: 'low').handle_campaign(campaign.id)
+      self.delay(retry: false, queue: 'low').handle_campaign(sync_id, campaign.id)
     end
 
-    active_campaigns.size
+    yield active_campaigns.size, active_campaigns.pluck(:id), { }, false
   end
 
-  def self.handle_campaign(campaign_id)
+  def self.handle_campaign(sync_id, campaign_id)
+    audit_data = {sync_id: sync_id}
     campaign = IdentityRobotargeter::Campaign.find(campaign_id)
 
     contact_campaign = ContactCampaign.find_or_initialize_by(external_id: campaign.id, system: SYSTEM_NAME)
+    contact_campaign.audit_data = audit_data
     contact_campaign.update_attributes!(name: campaign.name, contact_type: CONTACT_TYPE)
 
     campaign.questions.each do |k,v|
-      ContactResponseKey.find_or_create_by!(key: k, contact_campaign: contact_campaign)
+      contact_response_key = ContactResponseKey.find_or_initialize_by(key: k, contact_campaign: contact_campaign)
+      contact_response_key.audit_data = audit_data
+      contact_response_key.save! if contact_response_key.new_record? 
     end
   end
 end

@@ -25,7 +25,8 @@ class Settings
 
   def self.options
     return {
-      "default_phone_country_code" => '61'
+      "default_phone_country_code" => '61',
+      "ignore_name_change_for_donation" => true
     }
   end
 end
