@@ -15,5 +15,13 @@ module IdentityRobotargeter
       .order('calls.updated_at')
       .limit(IdentityRobotargeter.get_pull_batch_amount)
     }
+
+    scope :updated_calls_all, -> (last_updated_at) {
+      includes({ callee: [:campaign] }, :survey_results)
+      .references(:campaign)
+      .where('campaigns.sync_to_identity')
+      .where('calls.outgoing AND calls.callee_id is not null')
+      .where('calls.updated_at >= ?', last_updated_at)
+    }
   end
 end
