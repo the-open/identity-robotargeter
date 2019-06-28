@@ -10,6 +10,7 @@ module IdentityRobotargeter
   FINALISED_STATUS = 'finalised'
   FAILED_STATUS = 'failed'
   PULL_JOBS = [[:fetch_new_calls, 30.minutes], [:fetch_new_redirects, 30.minutes], [:fetch_active_campaigns, 30.minutes]]
+  MEMBER_RECORD_DATA_TYPE='object'
 
   def self.push(sync_id, members, external_system_params)
     begin
@@ -18,7 +19,7 @@ module IdentityRobotargeter
       priority = ApplicationHelper.integer_or_nil(JSON.parse(external_system_params)['priority']) || 1
       campaign_name = Campaign.find(campaign_id).name
       audience = Audience.create!(sync_id: sync_id, campaign_id: campaign_id, priority: priority)
-      yield members.with_phone_type(phone_type), campaign_name
+      yield members.with_phone_type(phone_type), campaign_name, external_system_params
     rescue => e
       audience.update_attributes!(status: FAILED_STATUS) if audience
       raise e
@@ -86,6 +87,10 @@ module IdentityRobotargeter
 
   def self.get_pull_jobs
     defined?(PULL_JOBS) && PULL_JOBS.is_a?(Array) ? PULL_JOBS : []
+  end
+
+  def self.get_push_jobs
+    defined?(PUSH_JOBS) && PUSH_JOBS.is_a?(Array) ? PUSH_JOBS : []
   end
 
   def self.pull(sync_id, external_system_params)
