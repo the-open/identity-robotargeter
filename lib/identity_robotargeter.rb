@@ -153,10 +153,10 @@ module IdentityRobotargeter
         firstname: call.callee.first_name,
         lastname: call.callee.last_name
       },
-      "#{SYSTEM_NAME}:#{__method__.to_s}",
-      audit_data,
-      false,
-      true
+      entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
+      audit_data: audit_data,
+      ignore_name_change: false,
+      strict_member_id_match: true
     )
 
     unless contactee
