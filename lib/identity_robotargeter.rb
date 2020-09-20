@@ -142,21 +142,17 @@ module IdentityRobotargeter
   end
 
   def self.handle_new_call(sync_id, call_id)
-    audit_data = {sync_id: sync_id}
     call = Call.find(call_id)
     contact = Contact.find_or_initialize_by(external_id: call.id, system: SYSTEM_NAME)
-    contact.audit_data = audit_data
 
-    contactee = Member.upsert_member(
+    contactee = UpsertMember.call(
       {
         phones: [{ phone: call.callee.phone_number }],
         firstname: call.callee.first_name,
         lastname: call.callee.last_name
       },
       entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
-      audit_data: audit_data,
-      ignore_name_change: false,
-      strict_member_id_match: true
+      ignore_name_change: false
     )
 
     unless contactee
@@ -165,7 +161,6 @@ module IdentityRobotargeter
     end
 
     contact_campaign = ContactCampaign.find_or_initialize_by(external_id: call.callee.campaign.id, system: SYSTEM_NAME)
-    contact_campaign.audit_data = audit_data
     contact_campaign.update_attributes!(name: call.callee.campaign.name, contact_type: CONTACT_TYPE)
 
     contact.update_attributes!(contactee: contactee,
@@ -178,16 +173,14 @@ module IdentityRobotargeter
 
     if Settings.robotargeter.subscription_id && call.callee.opted_out_at
       subscription = Subscription.find(Settings.robotargeter.subscription_id)
-      contactee.unsubscribe_from(subscription, 'robotargeter:disposition', DateTime.now, nil, audit_data)
+      contactee.unsubscribe_from(subscription, 'robotargeter:disposition', DateTime.now, nil)
     end
 
     if Campaign.connection.tables.include?('survey_results')
       call.survey_results.each do |sr|
         contact_response_key = ContactResponseKey.find_or_initialize_by(key: sr.question, contact_campaign: contact_campaign)
-        contact_response_key.audit_data = audit_data
         contact_response_key.save! if contact_response_key.new_record? 
         contact_response = ContactResponse.find_or_initialize_by(contact: contact, value: sr.answer, contact_response_key: contact_response_key)
-        contact_response.audit_data = audit_data
         contact_response.save! if contact_response.new_record? 
       end
     end
@@ -230,7 +223,6 @@ module IdentityRobotargeter
   end
 
   def self.handle_new_redirect(sync_id, redirect_id)
-    audit_data = {sync_id: sync_id}
     redirect = Redirect.find(redirect_id)
 
     payload = {
@@ -242,7 +234,7 @@ module IdentityRobotargeter
       create_dt: redirect.created_at
     }
 
-    Member.record_action(payload, "#{SYSTEM_NAME}:#{__method__.to_s}", audit_data)
+    Member.record_action(payload, "#{SYSTEM_NAME}:#{__method__.to_s}")
     Sync.update_report_if_last_record_for_import(sync_id, redirect_id)
   end
 
@@ -267,16 +259,13 @@ module IdentityRobotargeter
   end
 
   def self.handle_campaign(sync_id, campaign_id)
-    audit_data = {sync_id: sync_id}
     campaign = IdentityRobotargeter::Campaign.find(campaign_id)
 
     contact_campaign = ContactCampaign.find_or_initialize_by(external_id: campaign.id, system: SYSTEM_NAME)
-    contact_campaign.audit_data = audit_data
     contact_campaign.update_attributes!(name: campaign.name, contact_type: CONTACT_TYPE)
 
     campaign.questions.each do |k,v|
       contact_response_key = ContactResponseKey.find_or_initialize_by(key: k, contact_campaign: contact_campaign)
-      contact_response_key.audit_data = audit_data
       contact_response_key.save! if contact_response_key.new_record? 
     end
   end
