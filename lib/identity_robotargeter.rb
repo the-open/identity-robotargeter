@@ -12,13 +12,14 @@ module IdentityRobotargeter
   PULL_JOBS = [[:fetch_new_calls, 30.minutes], [:fetch_new_redirects, 30.minutes], [:fetch_active_campaigns, 30.minutes]]
   MEMBER_RECORD_DATA_TYPE='object'
 
-  def self.push(sync_id, members, external_system_params)
+  def self.push(sync_id, member_ids, external_system_params)
     begin
       campaign_id = JSON.parse(external_system_params)['campaign_id'].to_i
       phone_type = JSON.parse(external_system_params)['phone_type'].to_s
       priority = ApplicationHelper.integer_or_nil(JSON.parse(external_system_params)['priority']) || 1
       campaign_name = Campaign.find(campaign_id).name
       audience = Audience.create!(sync_id: sync_id, campaign_id: campaign_id, priority: priority)
+      members = Member.find(member_ids)
       yield members.with_phone_type(phone_type), campaign_name, external_system_params
     rescue => e
       audience.update_attributes!(status: FAILED_STATUS) if audience
