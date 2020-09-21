@@ -19,7 +19,7 @@ module IdentityRobotargeter
       priority = ApplicationHelper.integer_or_nil(JSON.parse(external_system_params)['priority']) || 1
       campaign_name = Campaign.find(campaign_id).name
       audience = Audience.create!(sync_id: sync_id, campaign_id: campaign_id, priority: priority)
-      members = Member.find(member_ids).with_phone_type(phone_type)
+      members = Member.where(id: member_ids).with_phone_type(phone_type)
       yield members, campaign_name
     rescue => e
       audience.update_attributes!(status: FAILED_STATUS) if audience
