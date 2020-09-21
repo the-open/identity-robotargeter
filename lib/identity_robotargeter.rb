@@ -235,7 +235,6 @@ module IdentityRobotargeter
     }
 
     Member.record_action(payload, "#{SYSTEM_NAME}:#{__method__.to_s}")
-    Sync.update_report_if_last_record_for_import(sync_id, redirect_id)
   end
 
   def self.fetch_active_campaigns(sync_id, force: false)
