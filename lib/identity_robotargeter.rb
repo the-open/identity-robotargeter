@@ -174,7 +174,7 @@ module IdentityRobotargeter
 
     if Settings.robotargeter.subscription_id && call.callee.opted_out_at
       subscription = Subscription.find(Settings.robotargeter.subscription_id)
-      contactee.unsubscribe_from(subscription, 'robotargeter:disposition', DateTime.now, nil)
+      contactee.unsubscribe_from(subscription, reason: 'robotargeter:disposition', event_time: DateTime.now)
     end
 
     if Campaign.connection.tables.include?('survey_results')
@@ -185,7 +185,6 @@ module IdentityRobotargeter
         contact_response.save! if contact_response.new_record? 
       end
     end
-    Sync.update_report_if_last_record_for_import(sync_id, call_id)
   end
 
   def self.fetch_new_redirects(sync_id)
