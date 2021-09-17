@@ -18,7 +18,7 @@ module IdentityRobotargeter
       campaign_name = Campaign.find(campaign_id).name
       audience = Audience.create!(sync_id: sync_id, campaign_id: campaign_id, priority: priority)
       members = Member.where(id: member_ids).with_phone_type(phone_type)
-      yield members, campaign_name
+      yield members, campaign_name, external_system_params
     rescue => e
       audience.update_attributes!(status: FAILED_STATUS) if audience
       raise e
@@ -170,9 +170,9 @@ module IdentityRobotargeter
     if Campaign.connection.tables.include?('survey_results')
       call.survey_results.each do |sr|
         contact_response_key = ContactResponseKey.find_or_initialize_by(key: sr.question, contact_campaign: contact_campaign)
-        contact_response_key.save! if contact_response_key.new_record? 
+        contact_response_key.save! if contact_response_key.new_record?
         contact_response = ContactResponse.find_or_initialize_by(contact: contact, value: sr.answer, contact_response_key: contact_response_key)
-        contact_response.save! if contact_response.new_record? 
+        contact_response.save! if contact_response.new_record?
       end
     end
   end
@@ -255,7 +255,7 @@ module IdentityRobotargeter
 
     campaign.questions.each do |k,v|
       contact_response_key = ContactResponseKey.find_or_initialize_by(key: k, contact_campaign: contact_campaign)
-      contact_response_key.save! if contact_response_key.new_record? 
+      contact_response_key.save! if contact_response_key.new_record?
     end
   end
 end
